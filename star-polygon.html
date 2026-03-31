@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>starPolygon — Adım Adım Görselleştirme</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1e2336;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8eaf0;
+    --muted: #8890a8;
+    --accent: #5b8dfa;
+    --accent-dim: rgba(91,141,250,0.12);
+    --green: #4ade80;
+    --green-dim: rgba(74,222,128,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(91,141,250,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(91,141,250,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  .page { max-width: 980px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* Header */
+  header { margin-bottom: 40px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid rgba(91,141,250,0.2);
+    border-radius: 4px; padding: 4px 10px;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: clamp(24px, 4vw, 36px);
+    font-weight: 300;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+    margin-bottom: 10px;
+  }
+  h1 span { color: var(--accent); font-weight: 500; }
+  .subtitle { font-size: 15px; color: var(--muted); line-height: 1.6; max-width: 560px; }
+
+  /* Main layout */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media(max-width: 760px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Canvas panel */
+  .canvas-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .canvas-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .canvas-header span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--muted);
+  }
+  .dot-row { display: flex; gap: 6px; }
+  .dot-r { width: 10px; height: 10px; border-radius: 50%; background: #f87171; }
+  .dot-y { width: 10px; height: 10px; border-radius: 50%; background: #fbbf24; }
+  .dot-g { width: 10px; height: 10px; border-radius: 50%; background: #4ade80; }
+  #canvas { width: 100%; display: block; }
+
+  /* Legend */
+  .legend {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .lc { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Right panel */
+  .right-panel { display: flex; flex-direction: column; gap: 16px; }
+
+  /* Step info */
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .info-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .info-header .step-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--accent);
+    background: var(--accent-dim);
+    border-radius: 4px; padding: 3px 8px;
+  }
+  .info-header .step-total { font-size: 11px; color: var(--muted); }
+  .info-body { padding: 14px 16px; }
+  .info-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+  .info-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .info-desc strong { color: var(--text); font-weight: 500; }
+
+  /* Code block */
+  .code-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .code-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .code-header span { font-size: 11px; color: var(--muted); }
+  .code-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .code-body {
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; line-height: 1.8;
+    color: var(--muted);
+  }
+  .code-body .hl { color: var(--accent); }
+  .code-body .hl-green { color: var(--green); }
+  .code-body .hl-amber { color: var(--amber); }
+
+  /* Steps nav */
+  .steps-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+  }
+  .steps-label { font-size: 11px; color: var(--muted); margin-bottom: 10px; letter-spacing: .5px; text-transform: uppercase; }
+  .step-dots { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .step-dot {
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .step-dot:hover { border-color: var(--accent); color: var(--accent); }
+  .step-dot.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .nav-btns { display: flex; gap: 8px; }
+  .nav-btn {
+    flex: 1; padding: 9px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .nav-btn.primary:hover { background: #7aa7ff; }
+  .nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+  /* Progress bar */
+  .progress-wrap { height: 2px; background: var(--border); border-radius: 2px; margin-bottom: 20px; }
+  .progress-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s ease; }
+
+  /* Polar table */
+  .polar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .polar-header { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .polar-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 1fr 60px;
+    gap: 4px;
+    padding: 8px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    transition: background .15s;
+  }
+  .polar-row:last-child { border-bottom: none; }
+  .polar-row.header-row { color: var(--muted); font-size: 11px; }
+  .polar-row.active-row { background: var(--accent-dim); }
+  .polar-row.done-row { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="tag">Algoritma Görselleştirme</div>
+    <h1><span>starPolygon</span> & polarCmp<br>Adım Adım</h1>
+    <p class="subtitle">Noktaların kutupsal açıya göre sıralanarak poligona nasıl eklendiğini interaktif olarak keşfedin.</p>
+  </header>
+
+  <div class="progress-wrap"><div class="progress-bar" id="progress"></div></div>
+
+  <div class="main-grid">
+
+    <div class="canvas-panel">
+      <div class="canvas-header">
+        <div class="dot-row"><div class="dot-r"></div><div class="dot-y"></div><div class="dot-g"></div></div>
+        <span>koordinat düzlemi</span>
+      </div>
+      <svg id="canvas" viewBox="0 0 440 380"></svg>
+      <div class="legend">
+        <div class="leg"><div class="lc" style="background:var(--red)"></div>Origin s[0]</div>
+        <div class="leg"><div class="lc" style="background:var(--amber)"></div>Karşılaştırılan</div>
+        <div class="leg"><div class="lc" style="background:var(--green)"></div>Eklendi</div>
+        <div class="leg"><div class="lc" style="background:var(--accent)"></div>Poligon kenarı</div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+
+      <div class="info-card">
+        <div class="info-header">
+          <div class="step-badge" id="step-badge">Adım 1</div>
+          <div class="step-total" id="step-total">/ 9</div>
+        </div>
+        <div class="info-body">
+          <div class="info-title" id="info-title"></div>
+          <div class="info-desc" id="info-desc"></div>
+        </div>
+      </div>
+
+      <div class="code-card">
+        <div class="code-header">
+          <div class="code-dot"></div>
+          <span>aktif kod satırı</span>
+        </div>
+        <div class="code-body" id="code-body"></div>
+      </div>
+
+      <div class="steps-card">
+        <div class="steps-label">Adımlar</div>
+        <div class="step-dots" id="step-dots"></div>
+        <div class="nav-btns">
+          <button class="nav-btn" id="btn-prev" onclick="go(-1)">← Geri</button>
+          <button class="nav-btn primary" id="btn-next" onclick="go(1)">İleri →</button>
+        </div>
+      </div>
+
+      <div class="polar-card">
+        <div class="polar-header">Kutupsal Açı Tablosu</div>
+        <div class="polar-row header-row">
+          <div>Nokta</div><div>Açı (°)</div><div>Uzunluk</div><div>Durum</div>
+        </div>
+        <div id="polar-table"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const W=440, H=380;
+const scale=48, ox=70, oy=300;
+
+const rawPts=[
+  {x:3,y:1,lbl:'s[0]'},
+  {x:1,y:4,lbl:'s[1]'},
+  {x:5,y:3,lbl:'s[2]'},
+  {x:2,y:5,lbl:'s[3]'},
+  {x:4,y:2,lbl:'s[4]'}
+];
+
+const origin=rawPts[0];
+
+function toSvg(p){return{x:ox+p.x*scale,y:oy-p.y*scale};}
+
+function polarAngle(p){
+  return Math.atan2(p.y-origin.y,p.x-origin.x)*180/Math.PI;
+}
+function polarLen(p){
+  const dx=p.x-origin.x,dy=p.y-origin.y;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+
+const polarData=rawPts.map(p=>({
+  ...p,
+  angle:polarAngle(p).toFixed(1),
+  len:polarLen(p).toFixed(2)
+}));
+
+const sorted=rawPts.slice(1).sort((a,b)=>{
+  const da=polarAngle(a)-polarAngle(b);
+  if(Math.abs(da)>1e-9) return da;
+  return polarLen(a)-polarLen(b);
+});
+const insertOrder=[origin,...sorted];
+
+const steps=[];
+
+steps.push({
+  title:'s[0] eklendi — Origin belirlendi',
+  desc:`<strong>p->insert(s[0])</strong> ile poligona ilk nokta eklenir. <strong>originPt = (${origin.x},${origin.y})</strong> olarak global değişkene kaydedilir. Tüm kutupsal açılar bu noktaya göre hesaplanacak.`,
+  code:`p->insert(s[0]);\nVertex *origin = p->v();\n<span class="hl">originPt = origin->point(); // (${origin.x},${origin.y})</span>`,
+  polygon:[origin], highlight:[], comparing:null, newPt:null, activeIdx:0
+});
+
+rawPts.slice(1).forEach((pt,idx)=>{
+  const a=polarAngle(pt).toFixed(1);
+  const l=polarLen(pt).toFixed(2);
+  const dx=pt.x-origin.x, dy=pt.y-origin.y;
+  steps.push({
+    title:`i=${idx+1}: s[${idx+1}]=(${pt.x},${pt.y}) — polarCmp hesaplanıyor`,
+    desc:`Vektör: <strong>(${dx}, ${dy})</strong><br>
+          Kutupsal açı: <strong>atan2(${dy},${dx}) = ${a}°</strong><br>
+          Uzunluk: <strong>${l}</strong><br>
+          polarCmp mevcut poligon köşesiyle karşılaştırıyor…`,
+    code:`Point vp = *p - originPt;\n<span class="hl-amber">// vp = (${dx}, ${dy})</span>\ndouble pPolar = vp.polarAngle();\n<span class="hl-amber">// pPolar = ${a}°</span>\ndouble lp = vp.length(); <span class="hl-amber">// ${l}</span>`,
+    polygon:insertOrder.slice(0,idx+1),
+    highlight:[],
+    comparing:pt,
+    newPt:null,
+    activeIdx:idx+1
+  });
+
+  steps.push({
+    title:`i=${idx+1}: s[${idx+1}] poligona ekleniyor`,
+    desc:`Doğru konum bulundu. Mevcut köşenin sola (COUNTER_CLOCKWISE) gerideki konumuna gidilir ve <strong>insert</strong> çağrılır. Poligon artık <strong>${idx+2} nokta</strong> içeriyor.`,
+    code:`p->advance(COUNTER_CLOCKWISE);\n<span class="hl-green">p->insert(s[${idx+1}]); // (${pt.x},${pt.y}) eklendi</span>`,
+    polygon:insertOrder.slice(0,idx+2),
+    highlight:[pt],
+    comparing:null,
+    newPt:pt,
+    activeIdx:idx+1
+  });
+});
+
+steps.push({
+  title:'Poligon tamamlandı — return p',
+  desc:`Tüm noktalar kutupsal sırayla eklendi.<br>
+        Sıralama: <strong>${insertOrder.map(p=>`(${p.x},${p.y})`).join(' → ')}</strong><br>
+        Yıldız poligon döndürülüyor.`,
+  code:`<span class="hl-green">return p;</span>\n// ${insertOrder.length} noktalı poligon hazır`,
+  polygon:insertOrder,
+  highlight:insertOrder,
+  comparing:null,
+  newPt:null,
+  activeIdx:-1
+});
+
+let cur=0;
+
+function render(idx){
+  cur=idx;
+  const s=steps[idx];
+
+  document.getElementById('step-badge').textContent=`Adım ${idx+1}`;
+  document.getElementById('step-total').textContent=`/ ${steps.length}`;
+  document.getElementById('info-title').textContent=s.title;
+  document.getElementById('info-desc').innerHTML=s.desc;
+  document.getElementById('code-body').innerHTML=s.code;
+  document.getElementById('progress').style.width=((idx+1)/steps.length*100)+'%';
+
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{
+    d.className='step-dot'+(i===idx?' active':'');
+  });
+
+  document.getElementById('btn-prev').disabled=idx===0;
+  document.getElementById('btn-next').disabled=idx===steps.length-1;
+  document.getElementById('btn-next').textContent=idx===steps.length-1?'Bitti ✓':'İleri →';
+
+  renderPolarTable(s.activeIdx, s.polygon);
+  drawCanvas(s);
+}
+
+function renderPolarTable(activeIdx, polygon){
+  const tbl=document.getElementById('polar-table');
+  tbl.innerHTML='';
+  rawPts.forEach((pt,i)=>{
+    const inPoly=polygon.some(p=>p.x===pt.x&&p.y===pt.y);
+    const isActive=i===activeIdx;
+    const row=document.createElement('div');
+    row.className='polar-row'+(isActive?' active-row':inPoly?' done-row':'');
+    row.innerHTML=`<div>${pt.lbl}</div><div>${polarData[i].angle}°</div><div>${polarData[i].len}</div><div>${i===0?'origin':inPoly?'✓':'–'}</div>`;
+    tbl.appendChild(row);
+  });
+}
+
+function drawCanvas(s){
+  const svg=document.getElementById('canvas');
+  const ns='http://www.w3.org/2000/svg';
+  svg.innerHTML='';
+
+  function el(tag,attrs,parent){
+    const e=document.createElementNS(ns,tag);
+    Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));
+    (parent||svg).appendChild(e);
+    return e;
+  }
+
+  el('defs',{}).innerHTML=`
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#5b8dfa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>`;
+
+  el('line',{x1:ox,y1:16,x2:ox,y2:H-16,stroke:'rgba(255,255,255,0.06)','stroke-width':1});
+  el('line',{x1:16,y1:oy,x2:W-16,y2:oy,stroke:'rgba(255,255,255,0.06)','stroke-width':1});
+
+  for(let i=1;i<=7;i++){
+    el('line',{x1:ox+i*scale,y1:oy-3,x2:ox+i*scale,y2:oy+3,stroke:'rgba(255,255,255,0.1)','stroke-width':0.5});
+    el('line',{x1:ox-3,y1:oy-i*scale,x2:ox+3,y2:oy-i*scale,stroke:'rgba(255,255,255,0.1)','stroke-width':0.5});
+    const tx=el('text',{x:ox+i*scale,y:oy+16,fill:'rgba(255,255,255,0.2)','font-size':10,'text-anchor':'middle'});
+    tx.textContent=i;
+    const ty=el('text',{x:ox-10,y:oy-i*scale+4,fill:'rgba(255,255,255,0.2)','font-size':10,'text-anchor':'middle'});
+    ty.textContent=i;
+  }
+
+  if(s.polygon.length>1){
+    const pts=s.polygon.map(p=>toSvg(p));
+    const closed=s.polygon.length===insertOrder.length;
+    const d='M'+pts.map(p=>`${p.x},${p.y}`).join('L')+(closed?'Z':'');
+    el('path',{d,fill:closed?'rgba(91,141,250,0.08)':'none',stroke:'#5b8dfa','stroke-width':1.5,'stroke-dasharray':closed?'none':'5 3'});
+  }
+
+  if(s.comparing){
+    const sv=toSvg(origin),tv=toSvg(s.comparing);
+    el('line',{x1:sv.x,y1:sv.y,x2:tv.x,y2:tv.y,stroke:'#fbbf24','stroke-width':1.5,'stroke-dasharray':'5 3','marker-end':'url(#arr-amber)'});
+    const mx=(sv.x+tv.x)/2, my=(sv.y+tv.y)/2;
+    const ang=polarAngle(s.comparing).toFixed(1);
+    const t=el('text',{x:mx+8,y:my-6,fill:'#fbbf24','font-size':10,'font-family':'JetBrains Mono, monospace'});
+    t.textContent=ang+'°';
+  }
+
+  rawPts.forEach((pt,i)=>{
+    const sv=toSvg(pt);
+    const inPoly=s.polygon.some(p=>p.x===pt.x&&p.y===pt.y);
+    const isComparing=s.comparing&&s.comparing.x===pt.x&&s.comparing.y===pt.y;
+    const isNew=s.newPt&&s.newPt.x===pt.x&&s.newPt.y===pt.y;
+    const isOrigin=i===0;
+    const isDone=s.polygon.length===insertOrder.length;
+
+    let fill='rgba(255,255,255,0.1)';
+    let r=5;
+    let strokeC='none';
+
+    if(isOrigin){fill='#f87171';r=8;strokeC='rgba(248,113,113,0.3)';}
+    else if(isNew){fill='#4ade80';r=8;strokeC='rgba(74,222,128,0.3)';}
+    else if(isComparing){fill='#fbbf24';r=8;strokeC='rgba(251,191,36,0.3)';}
+    else if(inPoly){fill='#4ade80';r=7;}
+    else{fill='rgba(255,255,255,0.15)';r=5;}
+
+    if(isDone&&!isOrigin){fill='#5b8dfa';r=7;strokeC='rgba(91,141,250,0.3)';}
+
+    if(strokeC!=='none'){
+      el('circle',{cx:sv.x,cy:sv.y,r:r+5,fill:strokeC});
+    }
+    el('circle',{cx:sv.x,cy:sv.y,r,fill});
+
+    const lx=sv.x+(pt.x>3?10:-10);
+    const ly=sv.y-12;
+    const anchor=pt.x>3?'start':'end';
+    const lc=isOrigin?'#f87171':inPoly||isDone?'#4ade80':isComparing?'#fbbf24':'rgba(255,255,255,0.35)';
+    const t=el('text',{x:lx,y:ly,fill:lc,'font-size':11,'font-family':'JetBrains Mono, monospace','text-anchor':anchor,'font-weight':inPoly||isOrigin?500:400});
+    t.textContent=`${pt.lbl}(${pt.x},${pt.y})`;
+  });
+}
+
+function go(dir){
+  const n=cur+dir;
+  if(n>=0&&n<steps.length) render(n);
+}
+
+const dotsEl=document.getElementById('step-dots');
+steps.forEach((_,i)=>{
+  const b=document.createElement('button');
+  b.className='step-dot';
+  b.textContent=i+1;
+  b.onclick=()=>render(i);
+  dotsEl.appendChild(b);
+});
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight') go(1);
+  if(e.key==='ArrowLeft') go(-1);
+});
+
+render(0);
+</script>
+</body>
+</html>
