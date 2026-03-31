@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pointInPolygon — Adım Adım Görselleştirme</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0f1117;--surface:#181c27;--border:rgba(255,255,255,0.08);
+    --text:#e8eaf0;--muted:#8890a8;
+    --accent:#5b8dfa;--accent-dim:rgba(91,141,250,0.12);
+    --green:#4ade80;--green-dim:rgba(74,222,128,0.1);
+    --amber:#fbbf24;--amber-dim:rgba(251,191,36,0.1);
+    --red:#f87171;--red-dim:rgba(248,113,113,0.1);
+    --purple:#c084fc;--purple-dim:rgba(192,132,252,0.1);
+    --teal:#2dd4bf;--teal-dim:rgba(45,212,191,0.1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(91,141,250,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(91,141,250,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;}
+  .page{max-width:1040px;margin:0 auto;padding:40px 20px 80px;}
+  header{margin-bottom:32px;}
+  .tag{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(91,141,250,0.2);border-radius:4px;padding:4px 10px;margin-bottom:14px;}
+  h1{font-size:clamp(22px,4vw,34px);font-weight:300;letter-spacing:-0.5px;line-height:1.2;margin-bottom:10px;}
+  h1 span{color:var(--accent);font-weight:500;}
+  .subtitle{font-size:14px;color:var(--muted);line-height:1.6;max-width:600px;}
+  .progress-wrap{height:2px;background:var(--border);border-radius:2px;margin-bottom:20px;}
+  .progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s ease;}
+  .main-grid{display:grid;grid-template-columns:1fr 370px;gap:20px;align-items:start;}
+  @media(max-width:800px){.main-grid{grid-template-columns:1fr;}}
+  .canvas-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .canvas-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+  .canvas-header span{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);}
+  .dot-row{display:flex;gap:6px;}
+  .dr{width:10px;height:10px;border-radius:50%;background:#f87171;}
+  .dy{width:10px;height:10px;border-radius:50%;background:#fbbf24;}
+  .dg{width:10px;height:10px;border-radius:50%;background:#4ade80;}
+  #canvas{width:100%;display:block;}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px;border-top:1px solid var(--border);}
+  .leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);}
+  .lc{width:8px;height:8px;border-radius:50%;}
+
+  /* Nokta seçici */
+  .point-selector{padding:14px 16px;border-bottom:1px solid var(--border);}
+  .ps-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+  .ps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .ps-btn{padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;}
+  .ps-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .ps-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+  .ps-btn.inside{border-color:rgba(74,222,128,0.4);color:var(--green);}
+  .ps-btn.outside{border-color:rgba(248,113,113,0.4);color:var(--red);}
+  .ps-btn.boundary{border-color:rgba(251,191,36,0.4);color:var(--amber);}
+
+  .right-panel{display:flex;flex-direction:column;gap:14px;}
+  .info-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .info-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  .step-badge{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);background:var(--accent-dim);border-radius:4px;padding:3px 8px;}
+  .step-total{font-size:11px;color:var(--muted);}
+  .info-body{padding:14px 16px;}
+  .info-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:8px;}
+  .info-desc{font-size:13px;color:var(--muted);line-height:1.7;}
+  .info-desc strong{color:var(--text);font-weight:500;}
+
+  .code-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .code-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+  .code-header span{font-size:11px;color:var(--muted);}
+  .code-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
+  .code-body{padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.9;color:var(--muted);white-space:pre-wrap;}
+  .hl{color:var(--accent);} .hl-g{color:var(--green);} .hl-a{color:var(--amber);}
+  .hl-r{color:var(--red);} .hl-p{color:var(--purple);} .hl-t{color:var(--teal);}
+
+  .steps-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;}
+  .steps-label{font-size:11px;color:var(--muted);margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase;}
+  .step-dots{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;}
+  .step-dot{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;}
+  .step-dot:hover{border-color:var(--accent);color:var(--accent);}
+  .step-dot.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .step-dot.crossing{border-color:var(--green);color:var(--green);}
+  .step-dot.touching{border-color:var(--amber);color:var(--amber);}
+  .nav-btns{display:flex;gap:8px;}
+  .nav-btn{flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif;}
+  .nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .nav-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .nav-btn.primary:hover{background:#7aa7ff;}
+  .nav-btn:disabled{opacity:.3;cursor:not-allowed;}
+
+  .state-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  .state-header{padding:10px 16px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  .state-row{display:grid;grid-template-columns:100px 1fr;gap:4px;padding:7px 16px;font-size:12px;border-bottom:1px solid var(--border);}
+  .state-row:last-child{border-bottom:none;}
+  .state-key{color:var(--muted);font-family:'JetBrains Mono',monospace;}
+  .state-val{font-family:'JetBrains Mono',monospace;}
+  .sv-inside{color:var(--green);} .sv-outside{color:var(--red);} .sv-boundary{color:var(--amber);}
+  .sv-crossing{color:var(--teal);} .sv-touching{color:var(--amber);} .sv-inessential{color:var(--muted);}
+
+  .result-banner{padding:12px 16px;border-radius:10px;font-size:14px;font-weight:500;text-align:center;margin-top:4px;}
+  .result-banner.inside{background:var(--green-dim);color:var(--green);border:1px solid rgba(74,222,128,0.2);}
+  .result-banner.outside{background:var(--red-dim);color:var(--red);border:1px solid rgba(248,113,113,0.2);}
+  .result-banner.boundary{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(251,191,36,0.2);}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="tag">Ray Casting — Işın Atma</div>
+    <h1><span>pointInPolygon</span><br>Adım Adım</h1>
+    <p class="subtitle">Bir noktanın poligon içinde, dışında veya sınırında olup olmadığını test eden algoritmanın her adımını interaktif olarak takip edin.</p>
+  </header>
+
+  <div class="progress-wrap"><div class="progress-bar" id="progress"></div></div>
+
+  <div class="main-grid">
+    <div class="canvas-panel">
+      <div class="canvas-header">
+        <div class="dot-row"><div class="dr"></div><div class="dy"></div><div class="dg"></div></div>
+        <span>pointInPolygon görselleştirme</span>
+      </div>
+      <div class="point-selector">
+        <div class="ps-label">Test noktası seç</div>
+        <div class="ps-grid" id="ps-grid"></div>
+      </div>
+      <svg id="canvas" viewBox="0 0 460 360"></svg>
+      <div class="legend">
+        <div class="leg"><div class="lc" style="background:var(--amber)"></div>Test noktası (a)</div>
+        <div class="leg"><div class="lc" style="background:var(--teal)"></div>Aktif kenar</div>
+        <div class="leg"><div class="lc" style="background:var(--green)"></div>CROSSING</div>
+        <div class="leg"><div class="lc" style="background:var(--purple)"></div>TOUCHING</div>
+        <div class="leg"><div class="lc" style="background:var(--muted)"></div>INESSENTIAL</div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div class="info-card">
+        <div class="info-header">
+          <div class="step-badge" id="step-badge">Adım 1</div>
+          <div class="step-total" id="step-total">/ —</div>
+        </div>
+        <div class="info-body">
+          <div class="info-title" id="info-title"></div>
+          <div class="info-desc" id="info-desc"></div>
+        </div>
+      </div>
+
+      <div class="code-card">
+        <div class="code-header"><div class="code-dot"></div><span>aktif kod satırı</span></div>
+        <div class="code-body" id="code-body"></div>
+      </div>
+
+      <div class="steps-card">
+        <div class="steps-label">Adımlar</div>
+        <div class="step-dots" id="step-dots"></div>
+        <div class="nav-btns">
+          <button class="nav-btn" id="btn-prev" onclick="go(-1)">← Geri</button>
+          <button class="nav-btn primary" id="btn-next" onclick="go(1)">İleri →</button>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <div class="state-header">Algoritma Durumu</div>
+        <div id="state-table"></div>
+      </div>
+
+      <div id="result-banner" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const W=460, H=360;
+const scale=50, ox=60, oy=310;
+
+// Poligon köşeleri (saat yönünün tersi)
+const polygon = [
+  {x:2,y:1},{x:6,y:1},{x:7,y:4},{x:5,y:6},{x:2,y:5},{x:1,y:3}
+];
+
+// Test noktaları
+const testPoints = [
+  {x:4,  y:3,   lbl:'P1', expected:'INSIDE'},
+  {x:0.5,y:2,   lbl:'P2', expected:'OUTSIDE'},
+  {x:7.5,y:3,   lbl:'P3', expected:'OUTSIDE'},
+  {x:4,  y:0.2, lbl:'P4', expected:'OUTSIDE'},
+  {x:6,  y:1,   lbl:'P5', expected:'BOUNDARY'},
+  {x:3,  y:5.5, lbl:'P6', expected:'OUTSIDE'},
+];
+
+function toSvg(p){return{x:ox+p.x*scale,y:oy-p.y*scale};}
+
+function classify(a, v, w){
+  // point a classify w.r.t. edge v->w
+  const ax=w.x-v.x, ay=w.y-v.y;
+  const bx=a.x-v.x, by=a.y-v.y;
+  const s=ax*by-ay*bx;
+  if(s>1e-9) return 'LEFT';
+  if(s<-1e-9) return 'RIGHT';
+  if((ax*bx+ay*by)<0) return 'BEHIND';
+  if((ax*ax+ay*ay)<(bx*bx+by*by)) return 'BEYOND';
+  if(Math.abs(bx)<1e-9&&Math.abs(by)<1e-9) return 'ORIGIN';
+  if(Math.abs(ax-bx)<1e-9&&Math.abs(ay-by)<1e-9) return 'DESTINATION';
+  return 'BETWEEN';
+}
+
+function edgeType(a, v, w){
+  const cl=classify(a,v,w);
+  if(cl==='LEFT')  return ((v.y<a.y)&&(a.y<=w.y)) ? 'CROSSING' : 'INESSENTIAL';
+  if(cl==='RIGHT') return ((w.y<a.y)&&(a.y<=v.y)) ? 'CROSSING' : 'INESSENTIAL';
+  if(cl==='BETWEEN'||cl==='ORIGIN'||cl==='DESTINATION') return 'TOUCHING';
+  return 'INESSENTIAL';
+}
+
+let selectedPt = 0;
+let cur = 0;
+let steps = [];
+
+function buildSteps(ptIdx){
+  const a = testPoints[ptIdx];
+  const stps = [];
+  let parity = 0;
+
+  stps.push({
+    title:`Başlangıç — parity = 0`,
+    desc:`Test noktası: <strong>a = (${a.x}, ${a.y})</strong><br>
+          <strong>parity = 0</strong> ile başlanır.<br>
+          Poligonun ${polygon.length} kenarı sırayla <strong>edgeType</strong> ile test edilecek.`,
+    code:`int parity = 0;\n<span class="hl">// a = (${a.x}, ${a.y})</span>\n// ${polygon.length} kenar test edilecek`,
+    activeEdge:-1, crossings:[], touchings:[], parity:0,
+    edgeResult:null, classifyResult:null
+  });
+
+  const crossingsSoFar=[];
+  const touchingsSoFar=[];
+
+  for(let i=0;i<polygon.length;i++){
+    const v=polygon[i], w=polygon[(i+1)%polygon.length];
+    const cl=classify(a,v,w);
+    const et=edgeType(a,v,w);
+
+    stps.push({
+      title:`Kenar ${i+1}: (${v.x},${v.y}) → (${w.x},${w.y})`,
+      desc:`<strong>edgeType(a, e${i+1})</strong> çağrılıyor.<br>
+            <strong>classify(a, e${i+1})</strong> → <strong>${cl}</strong><br>
+            v.y=${v.y}, a.y=${a.y}, w.y=${w.y}<br>
+            Sonuç: <strong>${et}</strong>`,
+      code:`Edge e = p.edge(); <span class="hl-a">// e${i+1}: (${v.x},${v.y})→(${w.x},${w.y})</span>\nswitch (edgeType(a, e)) {\n  classify → <span class="hl-t">${cl}</span>\n  → <span class="${et==='CROSSING'?'hl-g':et==='TOUCHING'?'hl-a':'hl-p'}">${et}</span>\n}`,
+      activeEdge:i,
+      crossings:[...crossingsSoFar],
+      touchings:[...touchingsSoFar],
+      parity,
+      edgeResult:et,
+      classifyResult:cl
+    });
+
+    if(et==='TOUCHING'){
+      stps.push({
+        title:`TOUCHING → BOUNDARY döndürülüyor`,
+        desc:`Nokta kenar üzerinde! <strong>case TOUCHING: return BOUNDARY</strong><br>
+              Döngü durduruluyor, sonuç: <strong>BOUNDARY</strong>`,
+        code:`case TOUCHING:\n<span class="hl-a">    return BOUNDARY; // nokta sınırda</span>`,
+        activeEdge:i,
+        crossings:[...crossingsSoFar],
+        touchings:[...touchingsSoFar,i],
+        parity,
+        edgeResult:'TOUCHING',
+        classifyResult:cl,
+        finalResult:'BOUNDARY'
+      });
+      return stps;
+    }
+
+    if(et==='CROSSING'){
+      parity=1-parity;
+      crossingsSoFar.push(i);
+      stps.push({
+        title:`CROSSING → parity = ${parity}`,
+        desc:`Işın kenarı geçti! <strong>case CROSSING: parity = 1 - parity</strong><br>
+              parity şimdi: <strong>${parity}</strong><br>
+              Toplam geçiş sayısı: <strong>${crossingsSoFar.length}</strong>`,
+        code:`case CROSSING:\n<span class="hl-g">    parity = 1 - parity;</span>\n<span class="hl-a">// parity = ${parity}</span>`,
+        activeEdge:i,
+        crossings:[...crossingsSoFar],
+        touchings:[...touchingsSoFar],
+        parity,
+        edgeResult:'CROSSING',
+        classifyResult:cl
+      });
+    }
+  }
+
+  const finalResult = parity ? 'INSIDE' : 'OUTSIDE';
+  stps.push({
+    title:`Sonuç: ${finalResult}`,
+    desc:`Tüm kenarlar test edildi.<br>
+          Toplam <strong>CROSSING: ${crossingsSoFar.length}</strong><br>
+          parity = ${parity} → <strong>${finalResult}</strong><br>
+          ${parity ? 'Tek sayıda geçiş → nokta içeride.' : 'Çift sayıda geçiş → nokta dışarıda.'}`,
+    code:`return (parity ? INSIDE : OUTSIDE);\n<span class="${finalResult==='INSIDE'?'hl-g':'hl-r'}">// → ${finalResult}</span>`,
+    activeEdge:-1,
+    crossings:[...crossingsSoFar],
+    touchings:[...touchingsSoFar],
+    parity,
+    edgeResult:null,
+    classifyResult:null,
+    finalResult
+  });
+
+  return stps;
+}
+
+function selectPoint(idx){
+  selectedPt=idx;
+  steps=buildSteps(idx);
+  cur=0;
+  buildDots();
+  document.querySelectorAll('.ps-btn').forEach((b,i)=>b.className='ps-btn'+(i===idx?' active ':' ')+testPoints[i].expected.toLowerCase());
+  render(0);
+}
+
+function buildDots(){
+  const el=document.getElementById('step-dots');
+  el.innerHTML='';
+  steps.forEach((s,i)=>{
+    const b=document.createElement('button');
+    b.className='step-dot'+(s.edgeResult==='CROSSING'?' crossing':s.edgeResult==='TOUCHING'?' touching':'');
+    b.textContent=i+1;
+    b.onclick=()=>render(i);
+    el.appendChild(b);
+  });
+}
+
+function render(idx){
+  cur=idx;
+  const s=steps[idx];
+
+  document.getElementById('step-badge').textContent=`Adım ${idx+1}`;
+  document.getElementById('step-total').textContent=`/ ${steps.length}`;
+  document.getElementById('info-title').textContent=s.title;
+  document.getElementById('info-desc').innerHTML=s.desc;
+  document.getElementById('code-body').innerHTML=s.code;
+  document.getElementById('progress').style.width=((idx+1)/steps.length*100)+'%';
+
+  document.querySelectorAll('.step-dot').forEach((d,i)=>{
+    const base=steps[i].edgeResult==='CROSSING'?' crossing':steps[i].edgeResult==='TOUCHING'?' touching':'';
+    d.className='step-dot'+base+(i===idx?' active':'');
+  });
+
+  document.getElementById('btn-prev').disabled=idx===0;
+  document.getElementById('btn-next').disabled=idx===steps.length-1;
+  document.getElementById('btn-next').textContent=idx===steps.length-1?'Bitti ✓':'İleri →';
+
+  const a=testPoints[selectedPt];
+  renderState(s,a);
+
+  const rb=document.getElementById('result-banner');
+  if(s.finalResult){
+    rb.style.display='block';
+    rb.className='result-banner '+s.finalResult.toLowerCase();
+    rb.textContent=s.finalResult==='INSIDE'?'→ INSIDE: Nokta poligonun içinde'
+                  :s.finalResult==='OUTSIDE'?'→ OUTSIDE: Nokta poligonun dışında'
+                  :'→ BOUNDARY: Nokta sınır üzerinde';
+  } else { rb.style.display='none'; }
+
+  drawCanvas(s,a);
+}
+
+function renderState(s,a){
+  const et=s.edgeResult||'—';
+  const cl=s.classifyResult||'—';
+  const etClass=et==='CROSSING'?'sv-crossing':et==='TOUCHING'?'sv-touching':et==='INESSENTIAL'?'sv-inessential':'';
+  document.getElementById('state-table').innerHTML=`
+    <div class="state-row"><div class="state-key">nokta a</div><div class="state-val sv-crossing">(${a.x},${a.y})</div></div>
+    <div class="state-row"><div class="state-key">parity</div><div class="state-val ${s.parity?'sv-inside':'sv-outside'}">${s.parity}</div></div>
+    <div class="state-row"><div class="state-key">classify</div><div class="state-val sv-touching">${cl}</div></div>
+    <div class="state-row"><div class="state-key">edgeType</div><div class="state-val ${etClass}">${et}</div></div>
+    <div class="state-row"><div class="state-key">crossings</div><div class="state-val sv-crossing">${s.crossings.length}</div></div>
+  `;
+}
+
+function drawCanvas(s,a){
+  const svg=document.getElementById('canvas');
+  const ns='http://www.w3.org/2000/svg';
+  svg.innerHTML='';
+  function el(tag,attrs,parent){
+    const e=document.createElementNS(ns,tag);
+    Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));
+    (parent||svg).appendChild(e);
+    return e;
+  }
+
+  // Grid
+  el('line',{x1:ox,y1:10,x2:ox,y2:H-10,stroke:'rgba(255,255,255,0.05)','stroke-width':1});
+  el('line',{x1:10,y1:oy,x2:W-10,y2:oy,stroke:'rgba(255,255,255,0.05)','stroke-width':1});
+  for(let i=1;i<=8;i++){
+    el('line',{x1:ox+i*scale,y1:oy-3,x2:ox+i*scale,y2:oy+3,stroke:'rgba(255,255,255,0.06)','stroke-width':0.5});
+    el('line',{x1:ox-3,y1:oy-i*scale,x2:ox+3,y2:oy-i*scale,stroke:'rgba(255,255,255,0.06)','stroke-width':0.5});
+    el('text',{x:ox+i*scale,y:oy+13,fill:'rgba(255,255,255,0.12)','font-size':9,'text-anchor':'middle'}).textContent=i;
+    el('text',{x:ox-10,y:oy-i*scale+4,fill:'rgba(255,255,255,0.12)','font-size':9,'text-anchor':'middle'}).textContent=i;
+  }
+
+  // Ray (horizontal to the right from a)
+  const aSvg=toSvg(a);
+  el('line',{x1:aSvg.x,y1:aSvg.y,x2:W-10,y2:aSvg.y,stroke:'rgba(251,191,36,0.3)','stroke-width':1.5,'stroke-dasharray':'6 4'});
+
+  // Polygon fill
+  const polyPts=polygon.map(p=>toSvg(p));
+  el('polygon',{points:polyPts.map(p=>`${p.x},${p.y}`).join(' '),fill:'rgba(91,141,250,0.07)',stroke:'rgba(91,141,250,0.3)','stroke-width':1});
+
+  // Draw all edges with color coding
+  for(let i=0;i<polygon.length;i++){
+    const v=polygon[i],w=polygon[(i+1)%polygon.length];
+    const sv=toSvg(v),sw=toSvg(w);
+    const isCrossing=s.crossings.includes(i);
+    const isTouching=s.touchings.includes(i);
+    const isActive=s.activeEdge===i;
+
+    let stroke='rgba(91,141,250,0.4)';
+    let sw2=1.5;
+    if(isCrossing){stroke='#2dd4bf';sw2=2.5;}
+    if(isTouching){stroke='#c084fc';sw2=2.5;}
+    if(isActive){stroke='#fbbf24';sw2=3;}
+
+    el('line',{x1:sv.x,y1:sv.y,x2:sw.x,y2:sw.y,stroke,strokeWidth:sw2,'stroke-width':sw2});
+
+    // Edge label
+    const mx=(sv.x+sw.x)/2, my=(sv.y+sw.y)/2;
+    el('text',{x:mx,y:my-6,fill:'rgba(255,255,255,0.2)','font-size':9,'text-anchor':'middle','font-family':'JetBrains Mono,monospace'}).textContent=`e${i+1}`;
+  }
+
+  // Polygon vertices
+  polygon.forEach((p,i)=>{
+    const sv=toSvg(p);
+    el('circle',{cx:sv.x,cy:sv.y,r:4,fill:'#5b8dfa'});
+    el('text',{x:sv.x+(p.x>4?8:-8),y:sv.y-8,fill:'rgba(91,141,250,0.7)','font-size':10,'font-family':'JetBrains Mono,monospace','text-anchor':p.x>4?'start':'end'}).textContent=`(${p.x},${p.y})`;
+  });
+
+  // Test point a
+  el('circle',{cx:aSvg.x,cy:aSvg.y,r:10,fill:'rgba(251,191,36,0.2)'});
+  el('circle',{cx:aSvg.x,cy:aSvg.y,r:6,fill:'#fbbf24'});
+  el('text',{x:aSvg.x+10,y:aSvg.y-8,fill:'#fbbf24','font-size':11,'font-family':'JetBrains Mono,monospace','font-weight':500}).textContent=`a(${a.x},${a.y})`;
+
+  // Crossing intersection points on ray
+  s.crossings.forEach(ci=>{
+    const v=polygon[ci],w=polygon[(ci+1)%polygon.length];
+    // Ray y=a.y, find x on edge v->w
+    if(Math.abs(w.y-v.y)<1e-9) return;
+    const t=(a.y-v.y)/(w.y-v.y);
+    const ix=v.x+t*(w.x-v.x);
+    const isvg=toSvg({x:ix,y:a.y});
+    el('circle',{cx:isvg.x,cy:isvg.y,r:5,fill:'#2dd4bf'});
+    el('circle',{cx:isvg.x,cy:isvg.y,r:8,fill:'rgba(45,212,191,0.2)'});
+  });
+}
+
+// Build point selector buttons
+const psGrid=document.getElementById('ps-grid');
+testPoints.forEach((pt,i)=>{
+  const b=document.createElement('button');
+  b.className='ps-btn '+pt.expected.toLowerCase();
+  b.textContent=`${pt.lbl}(${pt.x},${pt.y})`;
+  b.onclick=()=>selectPoint(i);
+  psGrid.appendChild(b);
+});
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight') go(1);
+  if(e.key==='ArrowLeft') go(-1);
+});
+
+function go(dir){
+  const n=cur+dir;
+  if(n>=0&&n<steps.length) render(n);
+}
+
+selectPoint(0);
+</script>
+</body>
+</html>
